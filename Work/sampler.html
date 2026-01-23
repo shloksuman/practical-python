@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Keyboard Sampler</title>
+    <style>
+        body {
+            font-family: monospace;
+            background-color: #222;
+            color: #eee;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        /* Control Panel Styling */
+        .controls {
+            background: #333;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: center;
+            border: 1px solid #444;
+        }
+        
+        select, input[type="file"] {
+            padding: 10px;
+            margin: 5px;
+            background: #444;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+
+        /* Keyboard Layout Styling */
+        .keyboard-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .key {
+            width: 60px;
+            height: 60px;
+            border: 2px solid #555;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            background: #333;
+            color: #777;
+            transition: all 0.1s;
+            position: relative;
+        }
+
+        /* Status indicator (green dot) if sound is loaded */
+        .key.loaded::after {
+            content: '';
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 8px;
+            height: 8px;
+            background-color: #00ff00;
+            border-radius: 50%;
+            box-shadow: 0 0 5px #00ff00;
+        }
+
+        /* Visual effect when pressing a key */
+        .key.active {
+            background-color: #eee;
+            color: #222;
+            transform: scale(0.95);
+            border-color: #fff;
+            box-shadow: 0 0 15px rgba(255,255,255,0.5);
+        }
+
+        .instructions {
+            margin-top: 20px;
+            color: #888;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h3>1. Select Key & Upload Audio</h3>
+        <select id="keySelector">
+            <option value="q">Q</option>
+            <option value="w">W</option>
+            <option value="e">E</option>
+            <option value="r">R</option>
+            <option value="t">T</option>
+            <option value="y">Y</option>
+            <option value="u">U</option>
+            <option value="i">I</option>
+            <option value="o">O</option>
+            <option value="p">P</option>
+        </select>
+        <input type="file" id="audioUploader" accept="audio/*, .m4a">
+        <div id="statusMsg" style="margin-top:10px; color: #aaa; font-size: 0.8rem;">Select a key and upload a file</div>
+    </div>
+
+    <div class="keyboard-row">
+        <div id="key-q" class="key">Q</div>
+        <div id="key-w" class="key">W</div>
+        <div id="key-e" class="key">E</div>
+        <div id="key-r" class="key">R</div>
+        <div id="key-t" class="key">T</div>
+        <div id="key-y" class="key">Y</div>
+        <div id="key-u" class="key">U</div>
+        <div id="key-i" class="key">I</div>
+        <div id="key-o" class="key">O</div>
+        <div id="key-p" class="key">P</div>
+    </div>
+
+    <div class="instructions">
+        Press keys on your physical keyboard to play. <br>
+        New key press interrupts the previous sound immediately.
+    </div>
+
+    <script>
+        // --- DATA STORE ---
+        // We store the Audio objects here. Keys correspond to the letter (e.g., 'q').
+        const soundMap = {}; 
+        
+        // This variable tracks the currently playing audio so we can stop it.
+        let currentPlayingAudio = null;
+
+        // --- DOM ELEMENTS ---
+        const keySelector = document.getElementById('keySelector');
+        const audioUploader = document.getElementById('audioUploader');
+        const statusMsg = document.getElementById('statusMsg');
+
+        // --- 1. UPLOAD LOGIC ---
+        audioUploader.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            const selectedKey = keySelector.value;
+
+            if (file) {
+                // Create a local URL for the file (no server needed)
+                const fileURL = URL.createObjectURL(file);
+                
+                // Create an HTML5 Audio object
+                const audioObj = new Audio(fileURL);
+                
+                // Store it in our map
+                soundMap[selectedKey] = audioObj;
+
+                // Visual Feedback: Add a green dot to the key on screen
+                document.getElementById('key-' + selectedKey).classList.add('loaded');
+                statusMsg.textContent = `Mapped ${file.name} to Key '${selectedKey.toUpperCase()}'`;
+                
+                // Reset uploader so you can upload the same file again if needed
+                audioUploader.value = ''; 
+            }
+        });
+
+        // --- 2. PLAYBACK LOGIC ---
+        function playSound(key) {
+            const audio = soundMap[key];
+            if (!audio) return; // No sound mapped for this key
+
+            // INTERRUPTION LOGIC:
+            // If any audio is currently playing, stop it immediately.
+            if (currentPlayingAudio) {
+                currentPlayingAudio.pause();
+                currentPlayingAudio.currentTime = 0; // Rewind to start
+            }
+
+            // Set the new current audio
+            currentPlayingAudio = audio;
+            
+            // Rewind the new audio (in case we are pressing 'Q' again rapidly)
+            currentPlayingAudio.currentTime = 0;
+            
+            // Play
+            currentPlayingAudio.play().catch(e => console.log("Browser blocked autoplay:", e));
+        }
+
+        // --- 3. KEYBOARD EVENT LISTENERS ---
+        document.addEventListener('keydown', (event) => {
+            const char = event.key.toLowerCase();
+            const validKeys = ['q','w','e','r','t','y','u','i','o','p'];
+
+            if (validKeys.includes(char)) {
+                // 1. Play the sound
+                playSound(char);
+
+                // 2. Visual Animation (Light up the key)
+                const keyDiv = document.getElementById('key-' + char);
+                if (keyDiv) {
+                    keyDiv.classList.add('active');
+                    // Remove the highlight after 100ms
+                    setTimeout(() => keyDiv.classList.remove('active'), 100);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
